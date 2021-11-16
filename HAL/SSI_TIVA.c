@@ -12,9 +12,9 @@ void SSI0_Gurley_Config()
     //      PA4 - SSI0Rx
     //      PA3 - SSI0Fss
     //      PA2 - SSI0CLK
-    GPIOPinConfigure(GPIO_PA2_SSI0CLK); // green
+    GPIOPinConfigure(GPIO_PA2_SSI0CLK);
     GPIOPinConfigure(GPIO_PA3_SSI0FSS);
-    GPIOPinConfigure(GPIO_PA4_SSI0RX);  // blue
+    GPIOPinConfigure(GPIO_PA4_SSI0RX);
     GPIOPinConfigure(GPIO_PA5_SSI0TX);
 
     GPIOPinTypeSSI(GPIO_PORTA_BASE, GPIO_PIN_5 | GPIO_PIN_4 | GPIO_PIN_3 |
@@ -173,8 +173,8 @@ void SSI3_Config_SPI()
 
     // Initialize chip select pin separately
     // Using port B pin 3 for chip select since PWM_Driver uses port D pin 1.
-    GPIOPinTypeGPIOOutput(GPIO_PORTB_BASE, GPIO_PIN_3);
-    GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
+    GPIOPinTypeGPIOOutput(GPIO_PORTD_BASE, GPIO_PIN_1);
+    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, GPIO_PIN_1);
 
     // Configure SSI clock
     SSIConfigSetExpClk(SSI3_BASE, SysCtlClockGet(), SSI_FRF_MOTO_MODE_0,

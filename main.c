@@ -1,4 +1,5 @@
 #include "main.h"
+#include "utils/uartstdio.c"
 
 // EtherCAT buffer
 extern PROCBUFFER_OUT MasterToTiva;
@@ -7,7 +8,6 @@ extern PROCBUFFER_IN TivaToMaster;
 AthenaLowLevel athena;
 
 volatile bool runTimer1 = true;
-volatile bool runTimer3 = true;
 
 uint16_t sample_rate = 1000; // Hz
 uint16_t logging_rate = 200; // Hz
@@ -199,21 +199,57 @@ int main(void)
     SysCtlDelay(2000);
 
     // Populate athena object
-    athena = athenaConstruct(sample_rate);
+//    athena = athenaConstruct(sample_rate);
 
     // Initialize tiva
-    tivaInit(&athena);
+//    tivaInit(&athena);
 
     // Enable processor interrupts
     IntMasterEnable();
-    sendInstruction();
+//    sendInstruction();
 
-    startTimer1(estop_rate); // Start vstop timer
-    startTimer2(logging_rate); // Start logging timer
-    startTimer3(sample_rate); // Start motor timer
+//    UART0Config();
+//    UART1Config();
+
+    SysCtlClockSet(SYSCTL_SYSDIV_2_5|SYSCTL_USE_PLL|SYSCTL_XTAL_16MHZ|SYSCTL_OSC_MAIN); //80Mhz
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_GPIOA); // enable UART0 GPIO peripheral
+    SysCtlPeripheralEnable(SYSCTL_PERIPH_UART0);
+    GPIOPinConfigure(GPIO_PA0_U0RX);
+    GPIOPinConfigure(GPIO_PA1_U0TX);
+    GPIOPinTypeUART(GPIO_PORTA_BASE, GPIO_PIN_0 | GPIO_PIN_1);
+    UARTStdioConfig(0, 115200, SysCtlClockGet()); // 115200 baud
+
+    // Configure the UART for 1,152,000, 8-N-1 operation.
+    UARTConfigSetExpClk(UART0_BASE, SysCtlClockGet(), 115200,
+                        (UART_CONFIG_WLEN_8 | UART_CONFIG_STOP_ONE |
+                        UART_CONFIG_PAR_NONE));
+    IntEnable(INT_UART0);
+    UARTIntEnable(UART0_BASE, UART_INT_RX | UART_INT_RT);
+
+
+    SSI3_Config_SPI(); // Configure SSI3 for SPI for use with EtherCAT
+
+    UARTprintf("starting\n");
+    int ret = EtherCAT_Init();
+    UARTprintf("finished initializing with %d\n", ret);
+
+    //    startTimer1(estop_rate); // Start vstop timer
+//    startTimer2(logging_rate); // Start logging timer
+//    startTimer3(sample_rate); // Start motor timer
 
     while(1)
     {
+        EtherCAT_MainTask();
+        // Read desired Tiva status, duty cycles, and directions from MasterToTiva
+        storeDataFromMaster(&athena);
+
+        int magX = (MasterToTiva.Byte[0] << 24) | (MasterToTiva.Byte[1] << 16) | (MasterToTiva.Byte[2] << 8) | MasterToTiva.Byte[3];
+        int dirX = MasterToTiva.Byte[4];
+        int magY = (MasterToTiva.Byte[5] << 24) | (MasterToTiva.Byte[6] << 16) | (MasterToTiva.Byte[7] << 8) | MasterToTiva.Byte[8];
+        int dirY = MasterToTiva.Byte[9];
+        UARTprintf("magx, dirx, magy, diry: %d, %d, %d, %d\n", magX, dirX, magY, dirY);
+
+        SysCtlDelay(99999);
     }
 }
 
@@ -263,8 +299,9 @@ void logData(void)
         char p[150];
 
         // Logging all Connor board data
-        sprintf(&p[0],"f: %d,%d min: %d,%d max: %d,%d e: %d,%d pwm: %d,%d dir: %d,%d motors running: %d\n\r",athena.joint0.forceSensor.raw,athena.joint1.forceSensor.raw,athena.joint0.lowerJointLimitRaw,athena.joint1.lowerJointLimitRaw,athena.joint0.upperJointLimitRaw,athena.joint1.upperJointLimitRaw,athena.joint0.encoder.raw,athena.joint1.encoder.raw,(int)athena.joint0.dutyCycle,(int)athena.joint1.dutyCycle, athena.joint0.direction, athena.joint1.direction, runTimer3);
+//        sprintf(&p[0],"f: %d,%d min: %d,%d max: %d,%d e: %d,%d pwm: %d,%d dir: %d,%d motors running: %d\n\r",athena.joint0.forceSensor.raw,athena.joint1.forceSensor.raw,athena.joint0.lowerJointLimitRaw,athena.joint1.lowerJointLimitRaw,athena.joint0.upperJointLimitRaw,athena.joint1.upperJointLimitRaw,athena.joint0.encoder.raw,athena.joint1.encoder.raw,(int)athena.joint0.dutyCycle,(int)athena.joint1.dutyCycle, athena.joint0.direction, athena.joint1.direction, runTimer3);
 //        sprintf(&p[0],"newtons: %d,%d raw: %d,%d slope: %d,%d offset: %d,%d \n\r",athena.joint0.forceSensor.newtons,athena.joint1.forceSensor.newtons,athena.joint0.forceSensor.raw,athena.joint1.forceSensor.raw,athena.joint0.forceSensor.slope,athena.joint1.forceSensor.slope,athena.joint0.encoder.raw,athena.joint1.encoder.raw,athena.joint0.forceSensor.slope,athena.joint1.forceSensor.slope,athena.joint0.forceSensor.offset,athena.joint1.forceSensor.offset);
+          sprintf(&p[0],"henlo\n\r");
 
         UARTSendString(0, p);
     }
@@ -278,73 +315,9 @@ void logData(void)
  */
 void Timer1AIntHandler(void)
 {
-    if (runTimer1)
-    {
-        if (EngageVirtualEStop())
-        {
-            // Stop timer1
-            runTimer3 = false;
-            athena.signalToMaster = HALT_SIGNAL_TM;
-
-            // Stop motor
-            athena.joint0.dutyCycle = 0;
-            athena.joint1.dutyCycle = 0;
-            sendSignal(&athena);
-
-            // Send shutdown signal to master
-            EtherCAT_MainTask();
-
-            // Send message over UART for debugging purposes
-            if (athena.joint0.encoder.raw > athena.joint0.upperJointLimitRaw ||
-                athena.joint0.encoder.raw < athena.joint0.lowerJointLimitRaw)
-            {
-                UARTSendString(0,"Joint 0 limit reached, stop all motors!\r\n");
-            }
-            else if (athena.joint1.encoder.raw > athena.joint1.upperJointLimitRaw ||
-                     athena.joint1.encoder.raw < athena.joint1.lowerJointLimitRaw)
-            {
-                UARTSendString(0,"Joint 1 limit reached, stop all motors!\r\n");
-            }
-        }
-        else
-        {
-            athena.signalToMaster = NORMAL_OPERATION;
-        }
-    }
-    else
-    {
-        // Stop motors if not running estop interrupt
-        athena.joint0.dutyCycle = 0;
-        athena.joint1.dutyCycle = 0;
-        sendSignal(&athena);
-    }
+    athena.signalToMaster = NORMAL_OPERATION;
 }
 
-
-/*
- * EngageVirtualEStop
- * Checks conditions to decide whether to engage Virtual EStop
- * based on Force, Abs Encoder Angle Ranges.
- */
-bool EngageVirtualEStop(void) {
-    if ((athena.joint0.encoder.raw != 65535 &&
-            (athena.joint0.encoder.raw > athena.joint0.upperJointLimitRaw ||
-        athena.joint0.encoder.raw < athena.joint0.lowerJointLimitRaw)) ||
-            (athena.joint1.encoder.raw != 65535 &&
-        athena.joint1.encoder.raw > athena.joint1.upperJointLimitRaw ||
-        athena.joint1.encoder.raw < athena.joint1.lowerJointLimitRaw) ||
-        athena.joint0.forceSensor.newtons > athena.joint0.forceSensor.upperLimitNewtons ||
-        athena.joint0.forceSensor.newtons < athena.joint0.forceSensor.lowerLimitNewtons ||
-        athena.joint1.forceSensor.newtons > athena.joint1.forceSensor.upperLimitNewtons ||
-        athena.joint1.forceSensor.newtons < athena.joint1.forceSensor.lowerLimitNewtons)
-    {
-            return true;
-    }
-    else {
-        return false;
-    }
-
-}
 
 /*
  * Timer2A interrupt handler
@@ -363,38 +336,12 @@ void Timer2AIntHandler(void)
  */
 void Timer3AIntHandler(void)
 {
-    if (athena.signalFromMaster == CONTROL_SIGNAL)
-    {
-        updateForces(&athena);
-        updateJointAngles(&athena);
-        updateMotorPositions(&athena);
-        updateMotorVelocities(&athena, (int32_t) sample_rate, 1000);
-    }
 
-    if (runTimer3)
-    {
-        // Send TivaToMaster and receive MasterToTiva
-        EtherCAT_MainTask();
-
-        athena.prevProcessIdFromMaster = athena.processIdFromMaster;
-        athena.processIdFromMaster = MasterToTiva.Byte[PROCESS_ID];
-
-        if(athena.processIdFromMaster != athena.prevProcessIdFromMaster)
-        {
-            // Read desired Tiva status, duty cycles, and directions from MasterToTiva
-            storeDataFromMaster(&athena);
-
-            // Act according Tiva status
-            // Turns off estop timer if necessary
-            runTimer1 = processDataFromMaster(&athena);
-             // Populate TivaToMaster data frame
-            loadDataForMaster(&athena);
-        }
-        else
-        {
-            runTimer1 = processDataFromMaster(&athena);
-            loadDataForMaster(&athena);
-        }
-    }
+//    UARTprintf("henlo\n");
+//    // Act according Tiva status
+//    // Turns off estop timer if necessary
+//    runTimer1 = processDataFromMaster(&athena);
+//     // Populate TivaToMaster data frame
+//    loadDataForMaster(&athena);
 }
 

@@ -164,7 +164,7 @@ uint32_t SPIReadRegisterDirect (uint16_t Address, uint16_t Len)
   uint16_t i;
 
   // SPI chip select enable
-  GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, 0);
+  GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, 0);
 
   // SPI read command
   SPI_Transfer(COMM_SPI_READ);
@@ -178,7 +178,7 @@ uint32_t SPIReadRegisterDirect (uint16_t Address, uint16_t Len)
   }
 
   // SPI chip select disable
-  GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
+  GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, GPIO_PIN_1);
 
   return Result.Long;
 }
@@ -194,7 +194,7 @@ void SPIWriteRegisterDirect (uint16_t Address, uint32_t DataOut)
   Data.Long = DataOut;
 
   // SPI chip select enable
-  GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, 0);
+  GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, 0);
 
   // SPI write command
   SPI_Transfer(COMM_SPI_WRITE);
@@ -207,7 +207,7 @@ void SPIWriteRegisterDirect (uint16_t Address, uint32_t DataOut)
   SPI_Transfer(Data.Byte[3]);
 
   // SPI chip select enable
-  GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
+  GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, GPIO_PIN_1);
 }
 
 // Address = register to read
@@ -294,7 +294,7 @@ void SPIReadProcRamFifo(void)
     while ((TempLong.Word[0]>>8) != FST_BYTE_NUM_ROUND_OUT/4);
 
     // Enable SPI chip select
-    GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, 0);
+    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, 0);
 
     // SPI read command
     SPI_Transfer(COMM_SPI_READ);
@@ -308,7 +308,7 @@ void SPIReadProcRamFifo(void)
     }
 
     // SPI chip select disable
-    GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
+    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, GPIO_PIN_1);
   #endif
 
 
@@ -372,7 +372,7 @@ void SPIWriteProcRamFifo()
     while ((TempLong.Word[0]>>8) <   (FST_BYTE_NUM_ROUND_IN/4));
 
     // Enable SPI chip select
-    GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, 0);
+    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, 0);
 
     // Send SPI write command
     SPI_Transfer(COMM_SPI_WRITE);
@@ -389,7 +389,7 @@ void SPIWriteProcRamFifo()
     SPI_Transfer (TivaToMaster.Byte[i]);
 
     // Disable SPI chip select
-    GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
+    GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, GPIO_PIN_1);
   #endif
 
 
@@ -444,7 +444,7 @@ uint32_t SPIReadRegisterIndirectOneByte (uint16_t Address)
   while(TempLong.Word[1] & ECAT_CSR_BUSY);
 
   // SPI chip select enable
-  GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, 0);
+  GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, 0);
 
   // SPI read command
   SPI_Transfer(COMM_SPI_READ);
@@ -456,7 +456,7 @@ uint32_t SPIReadRegisterIndirectOneByte (uint16_t Address)
   Result.Word[0] = data;
 
   // SPI chip select disable
-  GPIOPinWrite(GPIO_PORTB_BASE, GPIO_PIN_3, GPIO_PIN_3);
+  GPIOPinWrite(GPIO_PORTD_BASE, GPIO_PIN_1, GPIO_PIN_1);
 
   return Result.Long;
 
